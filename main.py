@@ -437,17 +437,19 @@ def pre_process_movies(summary_dir, dir_list):
 
     l_x = len(proj_img_x)
     l_y = len(proj_img_y)
+    # if the length along the x-axis is not equal to the length along y, then check if y is greater than
+    # x, if so, calculate the difference => length y - length x and store as proj_img_x after using numpy
     if (l_x != l_y):
         if (l_y > l_x):
             diff = l_y - l_x
-    proj_img_x = np.pad(proj_img_x, [(0, diff)])
+            proj_img_x = np.pad(proj_img_x, [(0, diff)])
 
     if (l_x > l_y):
         diff = l_x - l_y
-    proj_img_y = np.pad(proj_img_y, [(0, diff)])
+        proj_img_y = np.pad(proj_img_y, [(0, diff)])
 
-    proj_img_x = proj_img_x
-    proj_img_y = proj_img_y
+    #proj_img_x = proj_img_x
+    #proj_img_y = proj_img_y
     labels_x = np.arange(0, len(proj_img_x), 1)
 
     fig = plt.figure()
