@@ -10,8 +10,9 @@ from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib import transforms
-#from keras.preprocessing.image import img_to_array, array_to_img
-from tensorflow.keras.utils import img_to_array
+import keras
+from keras.preprocessing.image import img_to_array, array_to_img
+#from tensorflow.keras.utils import img_to_array
 from keras.preprocessing import image
 import shutil
 import read_roi
@@ -238,8 +239,15 @@ def pre_process_movies(summary_dir, dir_list):
     # Import images from each channel
     # Use if more than 1st image is used
     for file in spool_list:
+        """within the context of the created spool_list directory its looping through and asking python,
+        if the file is a thumbs.db, which is a database file containing a small JPEG image representing the larger file
+        then it will continue to the next file in the spool_list"""
         if (file == 'Thumbs.db'):
             continue
+
+        """if not, it will read the file and then saves it to both lists after creating a new subdirectory under right
+        and left channels and increment t_ with parameters - a way to track # of files that are not 'thumbs.db' """
+        # after increments, the new file is saved within a new subdirectory
         rgb_movie[t_, :, :, 0] = io.imread(left_chnl_dir + '/' + file)
         rgb_movie[t_, :, :, 1] = io.imread(right_chnl_dir + '/' + file)
         t_ = t_ + 1
@@ -248,6 +256,9 @@ def pre_process_movies(summary_dir, dir_list):
         # Find ROI file
         # single ROI
         roi_list = glob(dir_[5] + '/*.roi')
+        #count # of roi files in roi_list and if length is 1, then there isn't a zipped file
+        #if the length is less than 1, then there are no files in this list, so it scans for a zipped file
+        #for lengths beyond these conditions, it will print message and it will continue to the next iteration
         if (len(roi_list) == 1):
             roi_is_zip = False
         elif (len(roi_list) < 1):
@@ -260,29 +271,37 @@ def pre_process_movies(summary_dir, dir_list):
 
     for roi_file in roi_list:
         print('Processing ', roi_file)
-    # load the ROI and extract the coords
-    # make a mask from the coords
-    # create folder for this cropped out cell
-    # use mask to save the cropped movie file
-    if (roi_is_zip):
-        roi_points = read_roi.read_roi_zip(roi_file)
-    else:
-        fobj = open(roi_file, 'r+b')
-    roi_points = read_roi.read_roi(fobj)
-    roi_points = [roi_points, ]  # make format same as if its a zip
+        # load the ROI and extract the coords
+        # make a mask from the coords
+        # create folder for this cropped out cell
+        # use mask to save the cropped movie file
+        """if its zipped file, then the zipped file will be read and stored as roi_points"""
+        if (roi_is_zip):
+            roi_points = read_roi.read_roi_zip(roi_file)
+            """if the zipped file DNE, then it will store the opened roi file that is read in binary mode as 
+            fobj and then read fobj and store in roi_points, and then matches file formats as if it is a zip file"""
+        else:
+            fobj = open(roi_file, 'r+b')
+            roi_points = read_roi.read_roi(fobj)
+            roi_points = [roi_points, ]  # make format same as if its a zip
 
-    # ROI is bounding box, make mask
-    # go through each frame and apply masks, save cropped movie file
-    num_frames = len(rgb_movie)
+            # ROI is bounding box, make mask
+            # go through each frame and apply masks, save cropped movie file
+            num_frames = len(rgb_movie)
+            "based on file coords, roi_points = roi_count, bbox_points = second-coord, add # values to refer to file types"
     for roi_count, bbox_points in enumerate(roi_points):
+            # if this "os.path..." file DNE, then it will mkdir, meaning make a new directory with this pathway
+
+        """regardless of creation or not of the directory, then it will continue through loop, calc steps and columns
+        + more image-processing steps"""
         if (not os.path.isdir(roi_file[:-4] + '_' + str(roi_count + 1))):
             os.mkdir(roi_file[:-4] + '_' + str(roi_count + 1))
-    n_rows = bbox_points[2][0] - bbox_points[0][0] + 1
-    n_cols = bbox_points[2][1] - bbox_points[0][1] + 1
-    cropped_rgb_movie = np.empty(shape=(num_frames, n_rows, n_cols, 3), dtype='uint16')
-    cropped_g_movie = np.empty(shape=(num_frames, n_rows, n_cols, 1), dtype='uint16')
-    raw_cropped_g_movie = np.empty(shape=(num_frames, n_rows, n_cols, 1), dtype='uint16')
-    file_root = os.path.split(file)[1][:-4]
+            n_rows = bbox_points[2][0] - bbox_points[0][0] + 1
+            n_cols = bbox_points[2][1] - bbox_points[0][1] + 1
+            cropped_rgb_movie = np.empty(shape=(num_frames, n_rows, n_cols, 3), dtype='uint16')
+            cropped_g_movie = np.empty(shape=(num_frames, n_rows, n_cols, 1), dtype='uint16')
+            raw_cropped_g_movie = np.empty(shape=(num_frames, n_rows, n_cols, 1), dtype='uint16')
+            file_root = os.path.split(file)[1][:-4]
     for frame_i in range(num_frames):
         # 0.0 append frames and extract defined rois
         cropped_rgb_movie[frame_i] = rgb_movie[frame_i][bbox_points[0][0]:bbox_points[2][0] + 1,
@@ -361,6 +380,8 @@ def pre_process_movies(summary_dir, dir_list):
 
     for blob in im_props:
         properties = []
+        #scanning for desired blob sizes less than 25 and greater 1000, then if size is within range
+        #then it will skip to the next blob
         if ((blob.area < 25) or (blob.area > 1000)):
             continue
 
@@ -549,12 +570,15 @@ def pre_process_movies_idr(summary_dir, dir_list):
     # make a mask from the coords
     # create folder for this cropped out cell
     # use mask to save the cropped movie file
+    """if its zipped file, then the zipped file will be read and stored as roi_points"""
     if (roi_is_zip):
         roi_points = read_roi.read_roi_zip(roi_file)
+        """if the zipped file DNE, then it will store the opened roi file that is read in binary mode as 
+            fobj and then read fobj and store in roi_points, and then matches file formats as if it is a zip file"""
     else:
         fobj = open(roi_file, 'r+b')
-    roi_points = read_roi.read_roi(fobj)
-    roi_points = [roi_points, ]  # make format same as if its a zip
+        roi_points = read_roi.read_roi(fobj)
+        roi_points = [roi_points, ]  # make format same as if its a zip
 
     # ROI is bounding box, make mask
     # go through each frame and apply masks, save cropped movie file
@@ -565,16 +589,16 @@ def pre_process_movies_idr(summary_dir, dir_list):
         print('roi count: ' + str(roi_count))
         if (not os.path.isdir(roi_file[:-4] + '_' + str(roi_count + 1))):
             os.mkdir(roi_file[:-4] + '_' + str(roi_count + 1))
+
+        """if such-named directory is there, then itll be removed w shutil.rmtree - deleting the whole directory including subs;
+        if there is no such directory, then itll be created with the mkdir function (for both '/DetectedFoci' and 'DetectedFoci_Outlines)"""
         if (os.path.isdir(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci')):  # delete individual foci directory
             shutil.rmtree(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci')
-        if (
-        not os.path.isdir(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci')):  # create individual foci directory
+        if (not os.path.isdir(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci')):  # create individual foci directory
             os.mkdir(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci')
-        if (os.path.isdir(roi_file[:-4] + '_' + str(
-                roi_count + 1) + '/DetectedFoci_Outlines')):  # delete individual foci directory with outlines
+        if (os.path.isdir(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci_Outlines')):  # delete individual foci directory with outlines
             shutil.rmtree(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci_Outlines')
-        if (not os.path.isdir(roi_file[:-4] + '_' + str(
-                roi_count + 1) + '/DetectedFoci_Outlines')):  # create individual foci directory with outlines
+        if (not os.path.isdir(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci_Outlines')):  # create individual foci directory with outlines
             os.mkdir(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci_Outlines')
 
     n_rows = bbox_points[2][0] - bbox_points[0][0] + 1
@@ -667,6 +691,7 @@ def pre_process_movies_idr(summary_dir, dir_list):
         single_focus_img_raw = cropped_img[x:x + w, y:y + h]
         rows, cols = single_focus_img_raw.shape
         focus_tot_pix = rows * cols
+        #If area of pixels (r*c) is less than 3 or greater than 1700, then it will skip to next blob in list of im_props
         if ((focus_tot_pix < 3) or (focus_tot_pix > 1700)):  #
             continue
 
@@ -869,16 +894,19 @@ def pre_process_movies_df(summary_dir, dir_list):
     rgb_movie = df_file  # np.empty(shape=((len(spool_list)), r_raw, c_raw, 3), dtype='uint16') * 0 #
     for roi_file in roi_list:
         print('Processing ', roi_file)
-    # load the ROI and extract the coords
-    # make a mask from the coords
-    # create folder for this cropped out cell
-    # use mask to save the cropped movie file
-    if (roi_is_zip):
-        roi_points = read_roi.read_roi_zip(roi_file)
-    else:
-        fobj = open(roi_file, 'r+b')
-    roi_points = read_roi.read_roi(fobj)
-    roi_points = [roi_points, ]  # make format same as if its a zip
+        # load the ROI and extract the coords
+        # make a mask from the coords
+        # create folder for this cropped out cell
+        # use mask to save the cropped movie file
+        """if its zipped file, then the zipped file will be read and stored as roi_points"""
+        if (roi_is_zip):
+            roi_points = read_roi.read_roi_zip(roi_file)
+            """if the zipped file DNE, then it will store the opened roi file that is read in binary mode as 
+                fobj and then read fobj and store in roi_points, and then matches file formats as if it is a zip file"""
+        else:
+            fobj = open(roi_file, 'r+b')
+            roi_points = read_roi.read_roi(fobj)
+            roi_points = [roi_points, ]  # make format same as if its a zip
 
     # ROI is bounding box, make mask
     # go through each frame and apply masks, save cropped movie file
