@@ -68,7 +68,7 @@ import pandas as pd
 import cv2
 import os
 #import mahotas as mh
-# from __future__ import division #to avoid integer devision problem
+# from __future__ import division #to avoid integer division problem
 
 import seaborn as sns
 from itertools import repeat
