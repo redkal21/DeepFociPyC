@@ -67,7 +67,7 @@ import numpy as np
 import pandas as pd
 import cv2
 import os
-#import mahotas as mh
+import mahotas as mh
 # from __future__ import division #to avoid integer division problem
 
 import seaborn as sns
@@ -222,8 +222,7 @@ def pre_process_movies(summary_dir, dir_list):
     # import images
     def last_4chars(x):
         print(x[-8:])
-
-    return (x[-8:])
+        return (x[-8:])
 
     # Compile images; left = red chnl, right, green chnl
     # Define directories
@@ -545,8 +544,7 @@ def pre_process_movies_idr(summary_dir, dir_list):
     # import images
     def last_4chars(x):
         print(x[-8:])
-
-    return (x[-8:])
+        return (x[-8:])
 
     # Compile images; left = red chnl, right, green chnl
     # Define directories
@@ -881,8 +879,7 @@ def pre_process_movies_df(summary_dir, dir_list):
     # import images
     def last_4chars(x):
         print(x[-8:])
-
-    return (x[-8:])
+        return (x[-8:])
 
     # Define directories
     file = spool_list_file  # if only using first frame
