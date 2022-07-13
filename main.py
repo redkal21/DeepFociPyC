@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib import transforms
 import keras
-from keras.preprocessing.image import img_to_array, array_to_img
-#from tensorflow.keras.utils import img_to_array
+from keras_preprocessing.image import img_to_array
+from keras_preprocessing.image import array_to_img
 from keras.preprocessing import image
 import shutil
 import read_roi
