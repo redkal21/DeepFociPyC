@@ -153,6 +153,8 @@ def draw_on_img(file, file_root, draw_img, obj_bbox, obj_coords, center_coordina
     if (draw_contours):
         coords = obj_coords
     obj_mask = np.zeros(shape=draw_img.shape, dtype='uint8')  # shape=draw_img.shape[:-1]
+    #Loops through all coordinates for each image applying object masks - image processing function
+    #Draws contours around detected regions of interests with r = 1, blue color
     for i in range(len(coords)):
         obj_mask[coords[i][0], coords[i][1]] = 255
     contours, hierarchy = cv2.findContours(obj_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
@@ -175,6 +177,7 @@ def get_dir_list(base_dir):
     final_dir_dict = {}
     # get all directories that match expected format
     dir_list = glob(base_dir + '/*')
+    #Loops through public directories and scans for folders formatted in DATE_DRUG_TIME
     for dir_ in dir_list:
         if (os.path.isdir(dir_)):
             key = os.path.split(dir_)[1]
@@ -191,6 +194,9 @@ def get_dir_list(base_dir):
 
     cur_dir = dir_ + '/Output'
     experiment_dirs = glob(cur_dir + '/*')
+    """Loops through experimental directories and looks for a match that consists of only 
+    digits (r’ ^[0-9]+$’ - reading for names that contain adjacent / contiguous string of digits), 
+    if it doesn’t find a match for digit-specific directories, it skips"""
     for exp_dir in experiment_dirs:
         if (os.path.isdir(exp_dir)):
             mo = re.match(r'^[0-9]+$', os.path.split(exp_dir)[1])
@@ -198,6 +204,12 @@ def get_dir_list(base_dir):
 
     exp_num = os.path.split(exp_dir)[1]
     spool_dirs = glob(exp_dir + '/spool_*')
+    #spool refers to temporary storage spaces
+    #Under exp directories, there are spool + other directories
+    """Prior to for loop, created another global spool ‘dirs’ to include exp + spool directories;
+    for loop scans for directory names with spool + digits (‘[0-9]+$’); no match = skip final_dir_dict;
+    Collects list of matched directories with formatted dates, drugs, etc. specs;
+    Prints list of spool directories captured in final directory dictionary"""
     for spool_dir in spool_dirs:
         if (os.path.isdir(spool_dir)):
             spool = os.path.split(spool_dir)[1]
@@ -210,7 +222,15 @@ def get_dir_list(base_dir):
 
 
 def pre_process_movies(summary_dir, dir_list):
-    # dir_list = dir_list[5:8] # for debugging
+    # dir_list = dir_list[5:8] # for
+    #Pre - process function; two parameters(summary_dir, dir_list)
+    """Reads BP1 - 2 data and to the dir_list with 25 elements (  # 25 is randomly selected for debugging);
+    # its loops through and adds sub-folder extension ‘/lefts’ + ‘/rights’  to 5 of the dir_ elements each
+    once labeled, the grayed out indicated location of left and right channel directories in
+    local machine (left_chnl_dir_files is a variable, and os.listdir(left_chnl_dir) is the location
+    where this directory is locally stored)"""
+    """dir holds the name to each directory in the list, not the whole element when calling dir_5, only accessing
+    5th element in the file's name"""
     for dir_ in dir_list:
         # Read BP1-2 data
         # dir_ = dir_list[25] # for debugging
@@ -243,7 +263,6 @@ def pre_process_movies(summary_dir, dir_list):
         then it will continue to the next file in the spool_list"""
         if (file == 'Thumbs.db'):
             continue
-
         """if not, it will read the file and then saves it to both lists after creating a new subdirectory under right
         and left channels and increment t_ with parameters - a way to track # of files that are not 'thumbs.db' """
         # after increments, the new file is saved within a new subdirectory
@@ -535,12 +554,18 @@ def pre_process_movies(summary_dir, dir_list):
 def pre_process_movies_idr(summary_dir, dir_list):
     # dir_list = dir_list[14:16] # for debugging
     # dir_list = [dir_list[i] for i in [2,3,4,5,6,7,8,9,10,12,13,14,15,16,17,18,19,20,21,23]]
+    """Pre - process - idr
+    Reads from IDR data, and dir_files is the box / folder hosting location of 5th directory in local storage
+    Sorting contents within new dir_files and sorted is now label spool_list
+    Isolate the first element in spool_list and label spool_list_file
+    Test is creating pathways to read each data set"""
+    # potential change  - swap out (dir_[5] + '/' + spool_list_file  for test defined in prior line, 522)
     for dir_ in dir_list:
         # Read IDR data
         dir_files = os.listdir(dir_[5])
         spool_list = sorted(dir_files)
         spool_list_file = spool_list[0]
-        test = dir_[5] + '/' + spool_list_file
+        # test = dir_[5] + '/' + spool_list_file #
         idr_file = io.imread(dir_[5] + '/' + spool_list_file)
 
     # import images
@@ -869,6 +894,13 @@ def pre_process_movies_idr(summary_dir, dir_list):
 
 def pre_process_movies_df(summary_dir, dir_list):
     # dir_list = dir_list[13:19] # for debugging
+    """Pre - process - movie df
+    Reads from IDR data, and dir_files is the box / folder hosting location of 5th directory in local storage
+    Sorting contents within new dir_files and sorted is now label spool_list
+    Scans for directories in spool_list with.DS_Store extension and, if it exists, removes from spool_list
+    Isolate the first element in spool_list and label spool_list_file df_file create creating pathways to read each
+    data set"""
+    # block is intended to scan for .DS_Store labelled directories and stores these directories with extension under df_file
     for dir_ in dir_list:
         # Read IDR data
         dir_files = os.listdir(dir_[5])
@@ -1206,3 +1238,64 @@ def pre_process_movies_df(summary_dir, dir_list):
             for summary_dir in dirs_dict.keys():
                 summary_dir = '2022_DF_data'
                 pre_process_movies_df(base_dir + '/' + summary_dir, dirs_dict[summary_dir])
+
+"""Similarities
+* def function with same parameters (summary_dir, dir_list):
+* all loops begin with for dir_ in dir_list:
+- aka accessing the same directory 
+
+Pre-process idr and df
+* both store sorted list of files in spool_list and save and assign to local variables their read files
+* spool_list_file = spool_list[0] - both idr and df assign 1st element from spool_list 
+to another local variable called spool_list_file
+
+
+Differences
+
+Pre-process 1st for loop creates new directories (2-subs /left + /right per directory) and 
+adds extension to construct local pathway
+- assigns the new paths to a local variable
+
+Pre-process-df
+- deletes .DS_store from spool_list, scanning through all files in the sorted directory
+- assigned variable is df_file, which is similar to idr_file used in the pre-process-idr function
+
+DRAFT CODE
+
+# combine pre-process movies
+   for dir_ in dir_list:
+       # Read BP1-2 data
+       # dir_ = dir_list[25] # for debugging
+       left_chnl_dir = dir_[5] + '/lefts'
+       right_chnl_dir = dir_[5] + '/rights'
+       left_chnl_dir_files = os.listdir(left_chnl_dir)
+       right_chnl_dir_files = os.listdir(right_chnl_dir)
+   for dir_ in dir_list:
+       # Read IDR data
+       dir_files = os.listdir(dir_[5])
+       spool_list = sorted(dir_files)
+       if ('.DS_Store' in spool_list):
+           spool_list.remove('.DS_Store')
+       spool_list_file = spool_list[0]
+       idr_file = io.imread(dir_[5] + '/' + spool_list_file)
+       df_file = io.imread(dir_[5] + '/' + spool_list_file)"""
+
+"""UNDER CONSTRUCTION
+# import images
+def last_4chars(x):
+    print(x[-8:])
+    return (x[-8:])
+
+# Compile images; left = red chnl, right, green chnl
+# Define directories
+spool_list = sorted(left_chnl_dir_files)
+single_left_file = io.imread(left_chnl_dir + '/' + spool_list[1])
+r_raw, c_raw = single_left_file.shape
+spool_list = spool_list[0:3]
+# file = spool_list # if only using first frame
+# Initialize image
+rgb_movie = np.empty(shape=((len(spool_list)), r_raw, c_raw, 3), dtype='uint16') * 0  #
+t_ = 0
+
+    r_raw, c_raw = idr_file.shape (how can this line be specific to idr)
+file = spool_list_file  # if only using first frame"""
