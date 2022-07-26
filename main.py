@@ -311,7 +311,8 @@ def pre_process_movies(summary_dir, dir_list):
             # if this "os.path..." file DNE, then it will mkdir, meaning make a new directory with this pathway
 
         """regardless of creation or not of the directory, then it will continue through loop, calc steps and columns
-        + more image-processing steps"""
+        + more image-processing steps; shape within np.empty function determines multi-dimensionality - 4 elements in ()s
+        = 4-dimensional"""
         if (not os.path.isdir(roi_file[:-4] + '_' + str(roi_count + 1))):
             os.mkdir(roi_file[:-4] + '_' + str(roi_count + 1))
             n_rows = bbox_points[2][0] - bbox_points[0][0] + 1
@@ -320,86 +321,89 @@ def pre_process_movies(summary_dir, dir_list):
             cropped_g_movie = np.empty(shape=(num_frames, n_rows, n_cols, 1), dtype='uint16')
             raw_cropped_g_movie = np.empty(shape=(num_frames, n_rows, n_cols, 1), dtype='uint16')
             file_root = os.path.split(file)[1][:-4]
+    """looping through frames in range of num_frames and add roi point coordinates to each frame and then given back to
+    the frame_i to reshape/recolor2 it; rgb - red, green, blue vs grayscale - rgb vs g"""
     for frame_i in range(num_frames):
+        # append = adding to the end
         # 0.0 append frames and extract defined rois
         cropped_rgb_movie[frame_i] = rgb_movie[frame_i][bbox_points[0][0]:bbox_points[2][0] + 1,
-                                     bbox_points[0][1]:bbox_points[2][1] + 1, :]
+                                         bbox_points[0][1]:bbox_points[2][1] + 1, :]
         cropped_g_movie[frame_i, :, :, :] = cropped_rgb_movie[frame_i, :, :, 1].reshape((n_rows, n_cols, 1))
 
-        # 0.1 extract defined roi
-        raw_img = cropped_g_movie[frame_i, :, :, :].reshape(n_rows, n_cols).copy()
-        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-            4] + '_preproc_01_raw_single_frame_roi' + str(roi_count + 1) + '_.tif', raw_img)
+      # 0.1 extract defined roi
+    raw_img = cropped_g_movie[frame_i, :, :, :].reshape(n_rows, n_cols).copy()
+    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+     4] + '_preproc_01_raw_single_frame_roi' + str(roi_count + 1) + '_.tif', raw_img)
 
-        # 0.2 histogram equalization
-        clahe = cv2.createCLAHE(clipLimit=10, tileGridSize=(10, 10))
-        img = clahe.apply(raw_img)
-        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-            4] + '_preproc_02_clahe_roi' + str(roi_count + 1) + '_.tif', img)
+    # 0.2 histogram equalization
+    clahe = cv2.createCLAHE(clipLimit=10, tileGridSize=(10, 10))
+    img = clahe.apply(raw_img)
+    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+        4] + '_preproc_02_clahe_roi' + str(roi_count + 1) + '_.tif', img)
 
-        # 0.3 remove hot pixels
-        medblurred_img = cv2.medianBlur(img, 3)
-        dif_img = img - medblurred_img
-        img = img - dif_img
-        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-            4] + '_preproc_03_hotpixfilt_roi' + str(roi_count + 1) + '_.tif', img)
+    # 0.3 remove hot pixels
+    medblurred_img = cv2.medianBlur(img, 3)
+    dif_img = img - medblurred_img
+    img = img - dif_img
+    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+        4] + '_preproc_03_hotpixfilt_roi' + str(roi_count + 1) + '_.tif', img)
 
-        # 0.4 gaussian blur
-        img = cv2.GaussianBlur(img, (7, 7), 0)
-        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-            4] + '_preproc_04_gaussblur_roi' + str(roi_count + 1) + '_.tif', img)
+    # 0.4 gaussian blur
+    img = cv2.GaussianBlur(img, (7, 7), 0)
+    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+        4] + '_preproc_04_gaussblur_roi' + str(roi_count + 1) + '_.tif', img)
 
-        # 0.5 background subtraction via k means clustering
-        max_pix = np.max(img)
-        Z = img.reshape((n_rows * n_cols), 1)
-        # convert to np.float32
-        Z = np.float32(Z)
-        # define criteria, number of clusters(K) and apply kmeans()
-        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-        K = 4  # 3 # for #1: 4
-        ret, label, center = cv2.kmeans(Z, K, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
-        sorted_center = center[:, 0].sort()
-        _, img = cv2.threshold(img, int(center[2]), max_pix, cv2.THRESH_TOZERO)
-        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-            4] + '_preproc_05_bskmeans_roi' + str(roi_count + 1) + '_.tif', img)
+    # 0.5 background subtraction via k means clustering
+    max_pix = np.max(img)
+    Z = img.reshape((n_rows * n_cols), 1)
+    # convert to np.float32
+    Z = np.float32(Z)
+    # define criteria, number of clusters(K) and apply kmeans()
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+    K = 4  # 3 # for #1: 4
+    ret, label, center = cv2.kmeans(Z, K, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+    sorted_center = center[:, 0].sort()
+    _, img = cv2.threshold(img, int(center[2]), max_pix, cv2.THRESH_TOZERO)
+    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+        4] + '_preproc_05_bskmeans_roi' + str(roi_count + 1) + '_.tif', img)
 
-        # append processed single roi for this frame
-        cropped_g_movie[frame_i, :, :, :] = np.asarray(img).reshape(n_rows, n_cols, 1)
-        raw_cropped_g_movie[frame_i, :, :, :] = np.asarray(raw_img).reshape(n_rows, n_cols, 1)
+    # append processed single roi for this frame
+    cropped_g_movie[frame_i, :, :, :] = np.asarray(img).reshape(n_rows, n_cols, 1)
+    raw_cropped_g_movie[frame_i, :, :, :] = np.asarray(raw_img).reshape(n_rows, n_cols, 1)
 
-        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-            4] + '_preproc_roi' + str(roi_count + 1) + '_.tif', cropped_g_movie)
-        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-            4] + '_preproc_raw_roi' + str(roi_count + 1) + '_.tif', raw_cropped_g_movie)
+    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+        4] + '_preproc_roi' + str(roi_count + 1) + '_.tif', cropped_g_movie)
+    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+        4] + '_preproc_raw_roi' + str(roi_count + 1) + '_.tif', raw_cropped_g_movie)
 
-        # 1.0 mean projection
-        max_img = np.mean(cropped_g_movie, axis=0).reshape(n_rows, n_cols)
-        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-            4] + '_proc_10_maxproj_roi' + str(roi_count + 1) + '_.tif', max_img.astype('uint16'))
-        raw_max_img = np.mean(raw_cropped_g_movie, axis=0).reshape(n_rows, n_cols)
-        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-            4] + '_proc_10_rawmaxproj_roi' + str(roi_count + 1) + '_.tif', raw_max_img.astype('uint16'))
+    # 1.0 mean projection
+    max_img = np.mean(cropped_g_movie, axis=0).reshape(n_rows, n_cols)
+    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+        4] + '_proc_10_maxproj_roi' + str(roi_count + 1) + '_.tif', max_img.astype('uint16'))
+    raw_max_img = np.mean(raw_cropped_g_movie, axis=0).reshape(n_rows, n_cols)
+    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+        4] + '_proc_10_rawmaxproj_roi' + str(roi_count + 1) + '_.tif', raw_max_img.astype('uint16'))
 
-        # 1.1 OTSU thresholding
-        th = filters.threshold_otsu(max_img)
-        img_mask = max_img > th
-        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-            4] + '_proc_11_OTSU_roi' + str(roi_count + 1) + '_.tif', img_mask)
+    # 1.1 OTSU thresholding
+    th = filters.threshold_otsu(max_img)
+    img_mask = max_img > th
+    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+        4] + '_proc_11_OTSU_roi' + str(roi_count + 1) + '_.tif', img_mask)
 
-        # 1.2 connected component labeling
-        l_, n_ = mh.label(img_mask.reshape(n_rows, n_cols), np.ones((3, 3), bool))  # binary_closed_hztl_k
-        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-            4] + '_proc_12_ccl_roi' + str(roi_count + 1) + '_.tif', l_)
+    # 1.2 connected component labeling
+    l_, n_ = mh.label(img_mask.reshape(n_rows, n_cols), np.ones((3, 3), bool))  # binary_closed_hztl_k
+    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+        4] + '_proc_12_ccl_roi' + str(roi_count + 1) + '_.tif', l_)
 
-        # 1.3 measure region properties
-        rs_k = regionprops(l_)
-        im_props = regionprops(l_, intensity_image=max_img.reshape(n_rows, n_cols))
-        results = []
+    # 1.3 measure region properties
+    rs_k = regionprops(l_)
+    im_props = regionprops(l_, intensity_image=max_img.reshape(n_rows, n_cols))
+    results = []
 
-    for blob in im_props:
-        properties = []
         #scanning for desired blob sizes less than 25 and greater 1000, then if size is within range
         #then it will skip to the next blob
+    for blob in im_props:
+        properties = []
         if ((blob.area < 25) or (blob.area > 1000)):
             continue
 
@@ -528,6 +532,7 @@ def pre_process_movies(summary_dir, dir_list):
     center_coordinates = 0
     box = 0
     # draw on all detected and processed foci, contours only
+    """xyz"""
     for focus_full_i, focus_full_row in df_foci_full.iterrows():
         draw_on_img(file, file_root, a, focus_full_row['bbox'], focus_full_row['coords'],
                     center_coordinates, box, 1, 1,
@@ -538,6 +543,7 @@ def pre_process_movies(summary_dir, dir_list):
         4] + '_procfocusDetectionCheck_Full.tif', a)
 
     # draw on all detected and processed foci, contours only
+    """xyz"""
     for focus_full_i, focus_full_row in df_foci_full.iterrows():
         draw_on_img(file, file_root, raw_max_img, focus_full_row['bbox'], focus_full_row['coords'],
                     center_coordinates, box, 1, 1,
@@ -589,6 +595,7 @@ def pre_process_movies_idr(summary_dir, dir_list):
     roi_is_zip = True
     rgb_movie = idr_file
 
+    """looping from roi_list and printing on screen 'Processing' for each roi_file"""
     for roi_file in roi_list:
         print('Processing ', roi_file)
     # load the ROI and extract the coords
@@ -609,6 +616,8 @@ def pre_process_movies_idr(summary_dir, dir_list):
     # go through each frame and apply masks, save cropped movie file
     num_frames = len(rgb_movie)
     # roi_points = roi_points[35:37]# for debugging
+    """roi_count iterates for roi_points, and bbox_points iterates for second element
+    bb = bounding box, and enumerate associates incremental value to each roi_point"""
     for roi_count, bbox_points in enumerate(roi_points):
         # roi_count = 7 # for debugging
         print('roi count: ' + str(roi_count))
@@ -630,9 +639,9 @@ def pre_process_movies_idr(summary_dir, dir_list):
     n_cols = bbox_points[2][1] - bbox_points[0][1] + 1
     file_root = os.path.split(file)[1][:-4]
 
-    # for frame_i in range(num_frames):
-    # 0.0 append frames and extract defined rois
-    cropped_img = rgb_movie[bbox_points[0][0]:bbox_points[2][0] + 1, bbox_points[0][1]:bbox_points[2][1] + 1]
+    for frame_i in range(num_frames):
+        # 0.0 append frames and extract defined rois
+        cropped_img = rgb_movie[bbox_points[0][0]:bbox_points[2][0] + 1, bbox_points[0][1]:bbox_points[2][1] + 1]
 
     # rescale image
     '''
@@ -707,6 +716,11 @@ def pre_process_movies_idr(summary_dir, dir_list):
     rs_k = regionprops(l_)
     im_props = regionprops(l_, intensity_image=img.reshape(n_rows_rescale, n_cols_rescale))
     results = []
+    """scanning blobs in im_props folder and labels, stores coordinates, draws rectangle on rois with cv2.boundingRect,
+    applies focus tool, crops image"""
+    #x:x + w - x is the first coord, x+w is the sum of the width across axis, and this operation calcs width of roi
+    #y:y + h - calcs height, reads as y and y+h
+    #focus_tot_pix - calcs # of pixels by order of area of roi
     for blob in im_props:
         properties = []
         i_focus = blob.label
@@ -717,120 +731,122 @@ def pre_process_movies_idr(summary_dir, dir_list):
         rows, cols = single_focus_img_raw.shape
         focus_tot_pix = rows * cols
         #If area of pixels (r*c) is less than 3 or greater than 1700, then it will skip to next blob in list of im_props
+        #scanning for images between range; 3>pix<1700
         if ((focus_tot_pix < 3) or (focus_tot_pix > 1700)):  #
             continue
 
-    # blob = im_props[30] # for debugging
-    print('blob label: ' + str(blob.label))
-    properties.append(blob.label)
-    properties.append(blob.centroid[0])
-    properties.append(blob.centroid[1])
-    properties.append(blob.orientation)
-    properties.append(blob.area)
-    properties.append(blob.perimeter)
-    properties.append(blob.major_axis_length)
-    properties.append(blob.minor_axis_length)
-    properties.append(blob.eccentricity)
-    properties.append(blob.coords)
-    properties.append(blob.bbox)
+        # blob = im_props[30] # for debugging
+        print('blob label: ' + str(blob.label))
+        properties.append(blob.label)
+        properties.append(blob.centroid[0])
+        properties.append(blob.centroid[1])
+        properties.append(blob.orientation)
+        properties.append(blob.area)
+        properties.append(blob.perimeter)
+        properties.append(blob.major_axis_length)
+        properties.append(blob.minor_axis_length)
+        properties.append(blob.eccentricity)
+        properties.append(blob.coords)
+        properties.append(blob.bbox)
 
-    focus_coords = blob.coords
+        focus_coords = blob.coords
 
-    i = blob.label
-    test = blob.coords
-    x, y, w, h = cv2.boundingRect(test)
-    single_focus_img = img[x:x + w, y:y + h]
-    single_focus_img_raw = cropped_img[x:x + w, y:y + h]
-    rows, cols = single_focus_img_raw.shape
-    (h, w) = single_focus_img_raw.shape
+        i = blob.label
+        test = blob.coords
+        x, y, w, h = cv2.boundingRect(test)
+        single_focus_img = img[x:x + w, y:y + h]
+        single_focus_img_raw = cropped_img[x:x + w, y:y + h]
+        rows, cols = single_focus_img_raw.shape
+        (h, w) = single_focus_img_raw.shape
 
-    proj_img_x = np.mean(single_focus_img, axis=0).reshape(w, )
-    proj_img_y = np.mean(single_focus_img, axis=1).reshape(h, )
+        proj_img_x = np.mean(single_focus_img, axis=0).reshape(w, )
+        proj_img_y = np.mean(single_focus_img, axis=1).reshape(h, )
 
-    l_x = len(proj_img_x)
-    l_y = len(proj_img_y)
-    if (l_x != l_y):
-        if (l_y > l_x):
-            diff = l_y - l_x
-    proj_img_x = np.pad(proj_img_x, [(0, diff)])
+        l_x = len(proj_img_x)
+        l_y = len(proj_img_y)
+        if (l_x != l_y):
+            if (l_y > l_x):
+                diff = l_y - l_x
+        proj_img_x = np.pad(proj_img_x, [(0, diff)])
+        #potential redundancy - if the length is not equal, find the difference; then the next chunk instructs that this code run regardless of relationship
+        if (l_x > l_y):
+            diff = l_x - l_y
+        proj_img_y = np.pad(proj_img_y, [(0, diff)])
 
-    if (l_x > l_y):
-        diff = l_x - l_y
-    proj_img_y = np.pad(proj_img_y, [(0, diff)])
+        proj_img_x = proj_img_x
+        proj_img_y = proj_img_y
+        labels_x = np.arange(0, len(proj_img_x), 1)
 
-    proj_img_x = proj_img_x
-    proj_img_y = proj_img_y
-    labels_x = np.arange(0, len(proj_img_x), 1)
+        fig = plt.figure()
+        width = 1
+        ax_x = plt.subplot(3, 1, 1)
+        ax_x.bar(labels_x, proj_img_x, width, color='g', edgecolor="k")
+        ax_x.set_xlabel("")
+        ax_x.set_title(' x ')
 
-    fig = plt.figure()
-    width = 1
-    ax_x = plt.subplot(3, 1, 1)
-    ax_x.bar(labels_x, proj_img_x, width, color='g', edgecolor="k")
-    ax_x.set_xlabel("")
-    ax_x.set_title(' x ')
+        labels_y = np.arange(0, len(proj_img_y), 1)
+        ax_y = plt.subplot(3, 1, 2)
+        ax_y.bar(labels_y, proj_img_y, width, color='g', edgecolor="k")
+        ax_y.set_xlabel("")
+        ax_y.set_title(' y ')
 
-    labels_y = np.arange(0, len(proj_img_y), 1)
-    ax_y = plt.subplot(3, 1, 2)
-    ax_y.bar(labels_y, proj_img_y, width, color='g', edgecolor="k")
-    ax_y.set_xlabel("")
-    ax_y.set_title(' y ')
+        ax_xy = plt.subplot(3, 1, 3)
+        rects1 = ax_xy.bar(labels_x, proj_img_x, width, color='royalblue', edgecolor="k")
+        rects2 = ax_xy.bar(labels_y, proj_img_y, width, color='seagreen', edgecolor="k")
+        ax_xy.set_xlabel("")
+        ax_xy.legend((rects1[0], rects2[0]), ('x', 'y'))
+        plt.close(fig)
 
-    ax_xy = plt.subplot(3, 1, 3)
-    rects1 = ax_xy.bar(labels_x, proj_img_x, width, color='royalblue', edgecolor="k")
-    rects2 = ax_xy.bar(labels_y, proj_img_y, width, color='seagreen', edgecolor="k")
-    ax_xy.set_xlabel("")
-    ax_xy.legend((rects1[0], rects2[0]), ('x', 'y'))
-    plt.close(fig)
+        proj_img_x_ = proj_img_x.ravel().astype('float32')
+        proj_img_y_ = proj_img_y.ravel().astype('float32')
 
-    proj_img_x_ = proj_img_x.ravel().astype('float32')
-    proj_img_y_ = proj_img_y.ravel().astype('float32')
+        compare_val_correl_xy = cv2.compareHist(proj_img_x_, proj_img_y_, cv2.HISTCMP_CORREL)
+        compare_val_chisq_xy = cv2.compareHist(proj_img_x_, proj_img_y_, cv2.HISTCMP_CHISQR)
+        compare_val_intrsct_xy = cv2.compareHist(proj_img_x_, proj_img_y_, cv2.HISTCMP_INTERSECT)
+        compare_val_bc_xy = cv2.compareHist(proj_img_x_, proj_img_y_, cv2.HISTCMP_BHATTACHARYYA)
+        compare_val_chisqalt_xy = cv2.compareHist(proj_img_x_, proj_img_y_, cv2.HISTCMP_CHISQR_ALT)
+        compare_val_hellinger_xy = cv2.compareHist(proj_img_x_, proj_img_y_, cv2.HISTCMP_HELLINGER)
+        compare_val_kl_xy = cv2.compareHist(proj_img_x_, proj_img_y_, cv2.HISTCMP_KL_DIV)
 
-    compare_val_correl_xy = cv2.compareHist(proj_img_x_, proj_img_y_, cv2.HISTCMP_CORREL)
-    compare_val_chisq_xy = cv2.compareHist(proj_img_x_, proj_img_y_, cv2.HISTCMP_CHISQR)
-    compare_val_intrsct_xy = cv2.compareHist(proj_img_x_, proj_img_y_, cv2.HISTCMP_INTERSECT)
-    compare_val_bc_xy = cv2.compareHist(proj_img_x_, proj_img_y_, cv2.HISTCMP_BHATTACHARYYA)
-    compare_val_chisqalt_xy = cv2.compareHist(proj_img_x_, proj_img_y_, cv2.HISTCMP_CHISQR_ALT)
-    compare_val_hellinger_xy = cv2.compareHist(proj_img_x_, proj_img_y_, cv2.HISTCMP_HELLINGER)
-    compare_val_kl_xy = cv2.compareHist(proj_img_x_, proj_img_y_, cv2.HISTCMP_KL_DIV)
+        # pixel number
+        len_single_focus = single_focus_img.size
 
-    # pixel number
-    len_single_focus = single_focus_img.size
+        properties.append(compare_val_correl_xy)
+        properties.append(compare_val_chisq_xy)
+        properties.append(compare_val_intrsct_xy)
+        properties.append(compare_val_bc_xy)
+        properties.append(compare_val_chisqalt_xy)
+        properties.append(compare_val_hellinger_xy)
+        properties.append(compare_val_kl_xy)
+        properties.append(len_single_focus)
+        results.append(properties)
 
-    properties.append(compare_val_correl_xy)
-    properties.append(compare_val_chisq_xy)
-    properties.append(compare_val_intrsct_xy)
-    properties.append(compare_val_bc_xy)
-    properties.append(compare_val_chisqalt_xy)
-    properties.append(compare_val_hellinger_xy)
-    properties.append(compare_val_kl_xy)
-    properties.append(len_single_focus)
-    results.append(properties)
-
-    # save images of individual foci, with and without outlines
-    # extract focus bounding box
-    focus_bbox = blob.bbox
-    img_r1, img_c1 = img_clahe.shape
-    # define bounding box
-    pixel_border = 3
-    r0 = focus_bbox[0] - pixel_border
-    r1 = focus_bbox[2] + pixel_border
-    c0 = focus_bbox[1] - pixel_border
-    c1 = focus_bbox[3] + pixel_border
-    # check if bounding box goes beyond image limits
-    if (r0 < 0):
-        r0 = 0
-    if (r1 > img_r1):
-        r1 = img_r1
-    if (c0 < 0):
-        c0 = 0
-    if (c1 > img_c1):
-        c1 = img_c1
-    # focus with no outlines
-    img_focus_clahe = img_clahe.copy()[r0:r1, c0:c1]
-    # focus with outlines
-    # draw outlines on full nucleus ROI
-    focus_max_val = int(np.max(img_clahe) / 2)
-    obj_mask = np.zeros(shape=img_clahe.shape, dtype='uint8')  # shape=draw_img.shape[:-1]
+        # save images of individual foci, with and without outlines
+        # extract focus bounding box
+        focus_bbox = blob.bbox
+        img_r1, img_c1 = img_clahe.shape
+        # define bounding box
+        pixel_border = 3
+        r0 = focus_bbox[0] - pixel_border
+        r1 = focus_bbox[2] + pixel_border
+        c0 = focus_bbox[1] - pixel_border
+        c1 = focus_bbox[3] + pixel_border
+        # check if bounding box goes beyond image limits
+        if (r0 < 0):
+            r0 = 0
+        if (r1 > img_r1):
+            r1 = img_r1
+        if (c0 < 0):
+            c0 = 0
+        if (c1 > img_c1):
+            c1 = img_c1
+        # focus with no outlines
+        img_focus_clahe = img_clahe.copy()[r0:r1, c0:c1]
+        # focus with outlines
+        # draw outlines on full nucleus ROI
+        focus_max_val = int(np.max(img_clahe) / 2)
+        obj_mask = np.zeros(shape=img_clahe.shape, dtype='uint8')  # shape=draw_img.shape[:-1]
+    """xyz"""
     for i in range(len(focus_coords)):
         obj_mask[focus_coords[i][0], focus_coords[i][1]] = 200
     contours, hierarchy = cv2.findContours(obj_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
@@ -868,6 +884,7 @@ def pre_process_movies_idr(summary_dir, dir_list):
     center_coordinates = 0
     box = 0
     # draw on all detected and processed foci, contours only
+    """xyz"""
     for focus_full_i, focus_full_row in df_foci_full.iterrows():
         draw_on_img(file, file_root, a, focus_full_row['bbox'], focus_full_row['coords'],
                     center_coordinates, box, 1, 1,
@@ -878,6 +895,7 @@ def pre_process_movies_idr(summary_dir, dir_list):
         4] + '_procfocusDetectionCheck_Full.tif', a)
 
     # draw on all detected and processed foci, contours only
+    """xyz"""
     for focus_full_i, focus_full_row in df_foci_full.iterrows():
         draw_on_img(file, file_root, cropped_img, focus_full_row['bbox'], focus_full_row['coords'],
                     center_coordinates, box, 1, 1,
@@ -942,6 +960,8 @@ def pre_process_movies_df(summary_dir, dir_list):
     # ROI is bounding box, make mask
     # go through each frame and apply masks, save cropped movie file
     num_frames = len(rgb_movie)
+    """roi_count iterates for roi_points, and bbox_points iterates for second element
+    bb = bounding box, and enumerate associates incremental value to each roi_point"""
     for roi_count, bbox_points in enumerate(roi_points):  # for debugging roi_points[1:2]
         # roi_count = 1 # for debugging
         print('roi count: ' + str(roi_count))
@@ -949,11 +969,10 @@ def pre_process_movies_df(summary_dir, dir_list):
             shutil.rmtree(roi_file[:-4] + '_' + str(roi_count + 1))
         if (not os.path.isdir(roi_file[:-4] + '_' + str(roi_count + 1))):  # create roi directory
             os.mkdir(roi_file[:-4] + '_' + str(roi_count + 1))
-        if (
-        not os.path.isdir(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci')):  # create individual foci directory
+        if (not os.path.isdir(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci')):  # create individual foci directory
             os.mkdir(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci')
         if (not os.path.isdir(roi_file[:-4] + '_' + str(
-                roi_count + 1) + '/DetectedFoci_Outlines')):  # create individual foci directory with outlines
+            roi_count + 1) + '/DetectedFoci_Outlines')):  # create individual foci directory with outlines
             os.mkdir(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci_Outlines')
 
     n_rows = bbox_points[2][0] - bbox_points[0][0] + 1
@@ -982,14 +1001,21 @@ def pre_process_movies_df(summary_dir, dir_list):
         4] + '_preproc_01_raw_roi' + str(roi_count + 1) + '_afterResize.tif', cropped_img)
 
     channel_names = ['R', 'G']
-    for i_chanl in [1]:  # [0, 1] # to loop through both channels
+    """To loop through all channels, the '1' in the loop should be changed in to 'channel_names' 
+        the loop will print the name of each channel it iterates through;
+        cv2.createCLAHE is a type of Adaptive Histogram Equalization(AHE) called Contrast Limiting AHE (CLAHE)
+        it limits over-contrasting of image to emphasize features of interest"""
+    for i_chanl in [1]:  # [0, 1] # to loop through both channels - Remove [1] and replace with channel_names
         # i_chanl = 1 # for debugging
         img = cropped_img[:, :, i_chanl]
         print('image channel: ' + channel_names[i_chanl])
         # 0.2 histogram equalization
+        # cliplimit is a threshold value for contrast
         clahe = cv2.createCLAHE(clipLimit=41, tileGridSize=(7, 7))  # 11, (7,7)
         img = clahe.apply(img)
         img_clahe = img.copy()
+        #saving newly clipped CLAHE applied image to img and then after copying it saves the
+        #enhanced image to local drive
         io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
             4] + '_preproc_02_clahe_roi' + str(roi_count + 1) + '_' + channel_names[i_chanl] + '.tif', img)
 
@@ -1040,6 +1066,12 @@ def pre_process_movies_df(summary_dir, dir_list):
         if (len(im_props) > 1000):
             continue
 
+    """scanning blobs in im_props folder and labels, stores coordinates, draws rectangle on rois with cv2.boundingRect,
+    applies focus tool, crops image"""
+    #x:x + w - x is the first coord, x+w is the sum of the width across axis, and this operation calcs width of roi
+    #y:y + h - calcs height, reads as y and y+h
+    #focus_tot_pix - calcs # of pixels by order of area of roi
+    #three-di
     for blob in im_props:
         properties = []
         i_focus = blob.label
@@ -1050,6 +1082,8 @@ def pre_process_movies_df(summary_dir, dir_list):
         rows, cols = single_focus_img_raw.shape
         focus_tot_pix = rows * cols
         (h, w) = single_focus_img_raw.shape
+        #If area of pixels (r*c) is less than 3 or greater than 1700, then it will skip to next blob in list of im_props
+        #scanning for images between range; 3>pix<1700
         if ((focus_tot_pix < 30) or (focus_tot_pix > 1700)):  # or (blob.area > 1000)
             continue
     # blob = im_props[10] # for debugging
@@ -1153,6 +1187,7 @@ def pre_process_movies_df(summary_dir, dir_list):
     # draw outlines on full nucleus ROI
     focus_max_val = int(np.max(img_clahe) / 2)
     obj_mask = np.zeros(shape=img_clahe.shape, dtype='uint8')  # shape=draw_img.shape[:-1]
+    """looping through """
     for i in range(len(focus_coords)):
         obj_mask[focus_coords[i][0], focus_coords[i][1]] = 200
     contours, hierarchy = cv2.findContours(obj_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
@@ -1192,6 +1227,7 @@ def pre_process_movies_df(summary_dir, dir_list):
     center_coordinates = 0
     box = 0
     # draw on all detected and processed foci, contours only
+    """xyz"""
     for focus_full_i, focus_full_row in df_foci_full.iterrows():
         draw_on_img(file, file_root, a, focus_full_row['bbox'], focus_full_row['coords'],
                     center_coordinates, box, 1, 1,
@@ -1202,6 +1238,7 @@ def pre_process_movies_df(summary_dir, dir_list):
     # 4] + '_procfocusDetectionCheck_Full_roi'+ str(roi_count + 1) +'_' + channel_names[i_chanl] + '.tif', a)
 
     # draw on all detected and processed foci, contours only
+    """xyz"""
     for focus_full_i, focus_full_row in df_foci_full.iterrows():
         # print(focus_full_i) # for debugging
         draw_on_img(file, file_root, img_1, focus_full_row['bbox'], focus_full_row['coords'],
