@@ -329,76 +329,89 @@ def pre_process_movies(summary_dir, dir_list):
         cropped_rgb_movie[frame_i] = rgb_movie[frame_i][bbox_points[0][0]:bbox_points[2][0] + 1,
                                          bbox_points[0][1]:bbox_points[2][1] + 1, :]
         cropped_g_movie[frame_i, :, :, :] = cropped_rgb_movie[frame_i, :, :, 1].reshape((n_rows, n_cols, 1))
+        """save copy of cropped and reshaped image with frame to local drive with .tif extension"""
+          # 0.1 extract defined roi
+        raw_img = cropped_g_movie[frame_i, :, :, :].reshape(n_rows, n_cols).copy()
+        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+         4] + '_preproc_01_raw_single_frame_roi' + str(roi_count + 1) + '_.tif', raw_img)
+        """limiting"""
+        # 0.2 histogram equalization
+        # cliplimit threshold value is low and region is larger relative to other application of clahe
+        # input image is raw image
+        """cv2.createCLAHE is a type of Adaptive Histogram Equalization(AHE) called Contrast Limiting AHE (CLAHE)
+           it limits over-contrasting of image to emphasize features within cropped image and storing copy of 
+           enhanced clahe image in img_clahe with .tif extension"""
+        clahe = cv2.createCLAHE(clipLimit=10, tileGridSize=(10, 10))
+        img = clahe.apply(raw_img)
+        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+            4] + '_preproc_02_clahe_roi' + str(roi_count + 1) + '_.tif', img)
 
-      # 0.1 extract defined roi
-    raw_img = cropped_g_movie[frame_i, :, :, :].reshape(n_rows, n_cols).copy()
-    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-     4] + '_preproc_01_raw_single_frame_roi' + str(roi_count + 1) + '_.tif', raw_img)
+        # 0.3 remove hot pixels
+        """applying median Blur to clahe applied cropped image and removing noise while still preserving elements unique 
+         to original image; saving filtered image"""
+        medblurred_img = cv2.medianBlur(img, 3)
+        dif_img = img - medblurred_img
+        img = img - dif_img
+        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+            4] + '_preproc_03_hotpixfilt_roi' + str(roi_count + 1) + '_.tif', img)
 
-    # 0.2 histogram equalization
-    clahe = cv2.createCLAHE(clipLimit=10, tileGridSize=(10, 10))
-    img = clahe.apply(raw_img)
-    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-        4] + '_preproc_02_clahe_roi' + str(roi_count + 1) + '_.tif', img)
+        # 0.4 gaussian blur
+        """applying gaussian blur to grided area of image and saving smoothed image; source = img, size = (7,7),
+        sigmaX and sigmaY = 0, isolating a region for feature extraction"""
+        img = cv2.GaussianBlur(img, (7, 7), 0)
+        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+            4] + '_preproc_04_gaussblur_roi' + str(roi_count + 1) + '_.tif', img)
 
-    # 0.3 remove hot pixels
-    medblurred_img = cv2.medianBlur(img, 3)
-    dif_img = img - medblurred_img
-    img = img - dif_img
-    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-        4] + '_preproc_03_hotpixfilt_roi' + str(roi_count + 1) + '_.tif', img)
+        # 0.5 background subtraction via k means clustering
+        max_pix = np.max(img)
+        Z = img.reshape((n_rows * n_cols), 1)
+        # convert to np.float32
+        Z = np.float32(Z)
+        # define criteria, number of clusters(K) and apply kmeans()
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+        K = 4  # 3 # for #1: 4
+        ret, label, center = cv2.kmeans(Z, K, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+        sorted_center = center[:, 0].sort()
+        _, img = cv2.threshold(img, int(center[2]), max_pix, cv2.THRESH_TOZERO)
+        """saves images with applied kmeans clustering algorithm"""
+        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+            4] + '_preproc_05_bskmeans_roi' + str(roi_count + 1) + '_.tif', img)
 
-    # 0.4 gaussian blur
-    img = cv2.GaussianBlur(img, (7, 7), 0)
-    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-        4] + '_preproc_04_gaussblur_roi' + str(roi_count + 1) + '_.tif', img)
+        # append processed single roi for this frame
+        cropped_g_movie[frame_i, :, :, :] = np.asarray(img).reshape(n_rows, n_cols, 1)
+        raw_cropped_g_movie[frame_i, :, :, :] = np.asarray(raw_img).reshape(n_rows, n_cols, 1)
+        """adding single image processed image to frame and saving as both cropped raw, grayscale and processed versions"""
+        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+            4] + '_preproc_roi' + str(roi_count + 1) + '_.tif', cropped_g_movie)
+        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+            4] + '_preproc_raw_roi' + str(roi_count + 1) + '_.tif', raw_cropped_g_movie)
+        """calculating means of both processed and not processed previously saved images with numpy package and saving
+        as two separate max projected means"""
+        # 1.0 mean projection
+        max_img = np.mean(cropped_g_movie, axis=0).reshape(n_rows, n_cols)
+        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+            4] + '_proc_10_maxproj_roi' + str(roi_count + 1) + '_.tif', max_img.astype('uint16'))
+        raw_max_img = np.mean(raw_cropped_g_movie, axis=0).reshape(n_rows, n_cols)
+        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+            4] + '_proc_10_rawmaxproj_roi' + str(roi_count + 1) + '_.tif', raw_max_img.astype('uint16'))
+        """image segmentation method that does automatic image thresholding; returns single intensity threshold
+        that separates foreground from background and then saves the OTSU applied image as img_mask"""
+        # 1.1 OTSU thresholding
+        th = filters.threshold_otsu(max_img)
+        img_mask = max_img > th
+        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+            4] + '_proc_11_OTSU_roi' + str(roi_count + 1) + '_.tif', img_mask)
+        """combining rows and columns with pixels sharing mean projected values within image and saving image with combined
+         groups of pixels to show connected regions for object detection"""
+        # 1.2 connected component labeling
+        l_, n_ = mh.label(img_mask.reshape(n_rows, n_cols), np.ones((3, 3), bool))  # binary_closed_hztl_k
+        io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
+            4] + '_proc_12_ccl_roi' + str(roi_count + 1) + '_.tif', l_)
 
-    # 0.5 background subtraction via k means clustering
-    max_pix = np.max(img)
-    Z = img.reshape((n_rows * n_cols), 1)
-    # convert to np.float32
-    Z = np.float32(Z)
-    # define criteria, number of clusters(K) and apply kmeans()
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-    K = 4  # 3 # for #1: 4
-    ret, label, center = cv2.kmeans(Z, K, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
-    sorted_center = center[:, 0].sort()
-    _, img = cv2.threshold(img, int(center[2]), max_pix, cv2.THRESH_TOZERO)
-    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-        4] + '_preproc_05_bskmeans_roi' + str(roi_count + 1) + '_.tif', img)
-
-    # append processed single roi for this frame
-    cropped_g_movie[frame_i, :, :, :] = np.asarray(img).reshape(n_rows, n_cols, 1)
-    raw_cropped_g_movie[frame_i, :, :, :] = np.asarray(raw_img).reshape(n_rows, n_cols, 1)
-
-    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-        4] + '_preproc_roi' + str(roi_count + 1) + '_.tif', cropped_g_movie)
-    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-        4] + '_preproc_raw_roi' + str(roi_count + 1) + '_.tif', raw_cropped_g_movie)
-
-    # 1.0 mean projection
-    max_img = np.mean(cropped_g_movie, axis=0).reshape(n_rows, n_cols)
-    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-        4] + '_proc_10_maxproj_roi' + str(roi_count + 1) + '_.tif', max_img.astype('uint16'))
-    raw_max_img = np.mean(raw_cropped_g_movie, axis=0).reshape(n_rows, n_cols)
-    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-        4] + '_proc_10_rawmaxproj_roi' + str(roi_count + 1) + '_.tif', raw_max_img.astype('uint16'))
-
-    # 1.1 OTSU thresholding
-    th = filters.threshold_otsu(max_img)
-    img_mask = max_img > th
-    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-        4] + '_proc_11_OTSU_roi' + str(roi_count + 1) + '_.tif', img_mask)
-
-    # 1.2 connected component labeling
-    l_, n_ = mh.label(img_mask.reshape(n_rows, n_cols), np.ones((3, 3), bool))  # binary_closed_hztl_k
-    io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
-        4] + '_proc_12_ccl_roi' + str(roi_count + 1) + '_.tif', l_)
-
-    # 1.3 measure region properties
-    rs_k = regionprops(l_)
-    im_props = regionprops(l_, intensity_image=max_img.reshape(n_rows, n_cols))
-    results = []
+        # 1.3 measure region properties
+        rs_k = regionprops(l_)
+        im_props = regionprops(l_, intensity_image=max_img.reshape(n_rows, n_cols))
+        results = []
 
         #scanning for desired blob sizes less than 25 and greater 1000, then if size is within range
         #then it will skip to the next blob
@@ -438,10 +451,16 @@ def pre_process_movies(summary_dir, dir_list):
     # ------------------------------------
     # save images
     # grayscale
+    """Saving images with extension file .tif (tagged image file format for high-quality image storage); 
+    moving from image generation/isolation of roi to image translation from rgb to grayscale"""
+    #note that tif have float compared to jpg and png that have integers, which helps preserve image precision
     io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
         4] + '_focusNo' + str(i) + '_0_grayscale' + str(roi_count + 1) + '.tif',
               single_focus_img_raw.astype('uint8'))
-
+    """Using computer vision library to pull gaussian blur algorithm to apply smoothing tool to image;
+     first element in ()'s - single_focus_img_raw.astype('uint8') - is the source of the image; second 
+     element - (7,7) - stands for h + w where tool should be applied; saves file with 
+     gaussian blur with new pathway to local drive"""
     # gaussian blur
     gaussblur_img = cv2.GaussianBlur(single_focus_img_raw.astype('uint8'), (7, 7), 0)
     io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
@@ -450,6 +469,9 @@ def pre_process_movies(summary_dir, dir_list):
     _, thresh_gauss_img = cv2.threshold(gaussblur_img, otsu_th, 255, cv2.THRESH_TOZERO)
     single_focus_img_gray = single_focus_img / 4
     single_focus_img_gray_8U = single_focus_img_gray.astype('uint8')
+    """saving the image that has extracted the foci using guassian blur, OTSU thresholding and cv2.THRESH_TOZERO, a tool
+    to replaces all pixel values below threshold with zero value; helps single out foci, and this image is saved,
+    once as 8-bit image ('full_max.tif') and the other in grayscale('_focusNo')"""
     io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[4] + str(
         roi_count + 1) + 'full_max.tif', max_img.astype('uint8'))
     io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
@@ -532,7 +554,8 @@ def pre_process_movies(summary_dir, dir_list):
     center_coordinates = 0
     box = 0
     # draw on all detected and processed foci, contours only
-    """xyz"""
+    """looping from detected and processed foci in iterrows directory to apply enhancement tools, drawing bounding box
+    + curves to isolate foci and save in high-quality .tif format/finalizing image processing"""
     for focus_full_i, focus_full_row in df_foci_full.iterrows():
         draw_on_img(file, file_root, a, focus_full_row['bbox'], focus_full_row['coords'],
                     center_coordinates, box, 1, 1,
@@ -543,7 +566,9 @@ def pre_process_movies(summary_dir, dir_list):
         4] + '_procfocusDetectionCheck_Full.tif', a)
 
     # draw on all detected and processed foci, contours only
-    """xyz"""
+    """looping from detected and processed foci in iterrows directory to apply enhancement tools, drawing bounding box
+    + curves to isolate foci and save in high-quality .tif format/finalizing image processing; unsure if this is the 
+    raw image?"""
     for focus_full_i, focus_full_row in df_foci_full.iterrows():
         draw_on_img(file, file_root, raw_max_img, focus_full_row['bbox'], focus_full_row['coords'],
                     center_coordinates, box, 1, 1,
@@ -638,7 +663,8 @@ def pre_process_movies_idr(summary_dir, dir_list):
     n_rows = bbox_points[2][0] - bbox_points[0][0] + 1
     n_cols = bbox_points[2][1] - bbox_points[0][1] + 1
     file_root = os.path.split(file)[1][:-4]
-
+    """looping through frames in range of num_frames and add roi point coordinates; 
+    providing guidelines for cropping foci"""
     for frame_i in range(num_frames):
         # 0.0 append frames and extract defined rois
         cropped_img = rgb_movie[bbox_points[0][0]:bbox_points[2][0] + 1, bbox_points[0][1]:bbox_points[2][1] + 1]
@@ -649,7 +675,7 @@ def pre_process_movies_idr(summary_dir, dir_list):
     cropped_img = cv2.resize(cropped_img, (0, 0), fx=rescale_factor, fy=rescale_factor)
     n_rows_rescale, n_cols_rescale = cropped_img.shape
     '''
-
+    """saving rescaled, cropped raw image before resizing"""
     io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
         4] + '_preproc_01_raw_roi' + str(roi_count + 1) + '_beforeResize.tif', cropped_img)
 
@@ -661,7 +687,7 @@ def pre_process_movies_idr(summary_dir, dir_list):
     cropped_img = cv2.resize(cropped_img, dim, interpolation=cv2.INTER_LINEAR)
     n_rows_rescale, n_cols_rescale = cropped_img.shape
     len_img_test_new = cropped_img.size
-
+    """resize and save raw image of roi"""
     # 0.1 extract defined roi
     io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
         4] + '_preproc_01_raw_roi' + str(roi_count + 1) + '_afterResize.tif', cropped_img)
@@ -669,6 +695,9 @@ def pre_process_movies_idr(summary_dir, dir_list):
     img = cropped_img
 
     # 0.2 histogram equalization
+    """cv2.createCLAHE is a type of Adaptive Histogram Equalization(AHE) called Contrast Limiting AHE (CLAHE)
+           it limits over-contrasting of image to emphasize features within cropped image and storing copy of 
+           enhanced clahe image in img_clahe with .tif extension"""
     clahe = cv2.createCLAHE(clipLimit=1, tileGridSize=(1, 1))
     img = clahe.apply(cropped_img)
     img_clahe = img.copy()
@@ -676,17 +705,22 @@ def pre_process_movies_idr(summary_dir, dir_list):
         4] + '_preproc_02_clahe_roi' + str(roi_count + 1) + '.tif', img)
 
     # 0.3 remove hot pixels
+    """applying median Blur to clahe applied cropped image and removing noise while still preserving elements unique 
+    to original image; saving filtered image"""
     medblurred_img = cv2.medianBlur(img, 3)
     dif_img = img - medblurred_img
     img = img - dif_img
     io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
         4] + '_preproc_03_hotpixfilt_roi' + str(roi_count + 1) + '.tif', img)
 
+    """applying gaussian blur to grided area of image and saving smoothed image; source = img, size = (1,1),
+    sigmaX and sigmaY = 0, isolating a region for feature extraction"""
     # 0.4 gaussian blur
     img = cv2.GaussianBlur(img, (1, 1), 0)
     io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
         4] + '_preproc_04_gaussblur_roi' + str(roi_count + 1) + '.tif', img)
 
+    """removes background/further reduces noise"""
     # 0.5 background subtraction via k means clustering
     max_pix = np.max(img)
     Z = img.reshape((n_rows_rescale * n_cols_rescale), 1)
@@ -698,9 +732,12 @@ def pre_process_movies_idr(summary_dir, dir_list):
     ret, label, center = cv2.kmeans(Z, K, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
     sorted_center = center[:, 0].sort()
     _, img = cv2.threshold(img, int(center[3]), max_pix, cv2.THRESH_TOZERO)
+    """saves images with applied kmeans clustering algorithm"""
     io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
         4] + '_preproc_05_bskmeans_roi' + str(roi_count + 1) + '.tif', img)
 
+    """image segmentation method that does automatic image thresholding; returns single intensity threshold
+    that separates foreground from background and then saves the OTSU applied image as img_mask"""
     # 1.0 OTSU thresholding
     th = filters.threshold_otsu(img)
     img_mask = img > th
@@ -708,6 +745,8 @@ def pre_process_movies_idr(summary_dir, dir_list):
         4] + '_proc_11_OTSU_roi' + str(roi_count + 1) + '.tif', img_mask)
 
     # 1.1 connected component labeling
+    """combining rows and columns with pixels sharing mean projected values within image and saving image with combined
+     groups of pixels to show connected regions for object detection"""
     l_, n_ = mh.label(img.reshape(n_rows_rescale, n_cols_rescale), np.ones((3, 3), bool))  # binary_closed_hztl_k
     io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
         4] + '_proc_12_ccl_roi' + str(roi_count + 1) + '.tif', l_)
@@ -846,7 +885,9 @@ def pre_process_movies_idr(summary_dir, dir_list):
         # draw outlines on full nucleus ROI
         focus_max_val = int(np.max(img_clahe) / 2)
         obj_mask = np.zeros(shape=img_clahe.shape, dtype='uint8')  # shape=draw_img.shape[:-1]
-    """xyz"""
+    """looping through and calculating length of foci coordinates in each image to draw outlines and applies contour
+      drawing tool; input image is clahe applied and then storing in img_focus_clahe_outlines
+      the cropped out the image with mask"""
     for i in range(len(focus_coords)):
         obj_mask[focus_coords[i][0], focus_coords[i][1]] = 200
     contours, hierarchy = cv2.findContours(obj_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
@@ -857,9 +898,12 @@ def pre_process_movies_idr(summary_dir, dir_list):
     # save focus in focus folder
     # max proj
     # no outlines
+    """saving focus within detected foci folder with .tif extension"""
     io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci/' + dir_[0] + '_' +
               dir_[1] + '_' + dir_[2] + '_' + dir_[3] + dir_[4] + '_roi' + str(roi_count + 1) +
               '_focusNo' + str(i_focus) + '_' + '.tif', img_focus_clahe)
+    """taking the most distinct features of image using CLAHE; outlining and saving
+     elements within roi for further detection"""
     # outlines
     io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci_Outlines/' + dir_[0] + '_' +
               dir_[1] + '_' + dir_[2] + '_' + dir_[3] + dir_[4] + '_roi' + str(roi_count + 1) +
@@ -884,7 +928,8 @@ def pre_process_movies_idr(summary_dir, dir_list):
     center_coordinates = 0
     box = 0
     # draw on all detected and processed foci, contours only
-    """xyz"""
+    """looping from detected and processed foci in iterrows directory to apply enhancement tools, drawing bounding box
+    + curves to isolate foci and save in high-quality .tif format/finalizing image processing"""
     for focus_full_i, focus_full_row in df_foci_full.iterrows():
         draw_on_img(file, file_root, a, focus_full_row['bbox'], focus_full_row['coords'],
                     center_coordinates, box, 1, 1,
@@ -895,7 +940,9 @@ def pre_process_movies_idr(summary_dir, dir_list):
         4] + '_procfocusDetectionCheck_Full.tif', a)
 
     # draw on all detected and processed foci, contours only
-    """xyz"""
+    """looping from detected and processed foci in iterrows directory to apply enhancement tools, drawing bounding box
+    + curves to isolate foci and save in high-quality .tif format/finalizing image processing; unsure if this is the 
+    raw image???"""
     for focus_full_i, focus_full_row in df_foci_full.iterrows():
         draw_on_img(file, file_root, cropped_img, focus_full_row['bbox'], focus_full_row['coords'],
                     center_coordinates, box, 1, 1,
@@ -983,6 +1030,7 @@ def pre_process_movies_df(summary_dir, dir_list):
     cropped_img = rgb_movie[bbox_points[0][0]:bbox_points[2][0] + 1,
                   bbox_points[0][1]:bbox_points[2][1] + 1]
 
+    """saving rescaled, cropped raw image before resizing"""
     # rescale image
     io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
         4] + '_preproc_01_raw_roi' + str(roi_count + 1) + '_beforeResize.tif', cropped_img)
@@ -995,7 +1043,7 @@ def pre_process_movies_df(summary_dir, dir_list):
     cropped_img = cv2.resize(cropped_img, dim, interpolation=cv2.INTER_LINEAR)
     n_rows_rescale, n_cols_rescale, _ = cropped_img.shape
     n_rows, n_cols, _ = cropped_img.shape
-
+    """save isolated cropped, rescaled image after resizing"""
     # 0.1 extract defined roi
     io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
         4] + '_preproc_01_raw_roi' + str(roi_count + 1) + '_afterResize.tif', cropped_img)
@@ -1020,6 +1068,8 @@ def pre_process_movies_df(summary_dir, dir_list):
             4] + '_preproc_02_clahe_roi' + str(roi_count + 1) + '_' + channel_names[i_chanl] + '.tif', img)
 
         # 0.3 remove hot pixels
+        """applying median Blur to clahe applied cropped image and removing noise while still preserving elements unique 
+         to original image; does not save filtered image"""
         medblurred_img = cv2.medianBlur(img, 3)  # 3
         dif_img = img - medblurred_img
         img = img - dif_img
@@ -1046,12 +1096,16 @@ def pre_process_movies_df(summary_dir, dir_list):
         # 4] + '_preproc_05_bskmeans_roi' + str(roi_count + 1) +'_' + channel_names[i_chanl] + '.tif', img)
 
         # 1.0 OTSU thresholding
+        """image segmentation method that does automatic image thresholding; returns single intensity threshold;
+        does not save after application"""
         th = filters.threshold_otsu(img)
         img_mask = img > th
         # io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
         # 4] + '_proc_11_OTSU_roi' + str(roi_count + 1) +'_' + channel_names[i_chanl] + '.tif', img_mask)
 
         # 1.1 connected component labeling
+        """combining rows and columns with pixels sharing mean projected values within image and saving image with combined
+         groups of pixels to show connected regions for object detection"""
         l_, n_ = mh.label(img.reshape(n_rows_rescale, n_cols_rescale),
                           np.ones((3, 3), bool))  # binary_closed_hztl_k #*******************RESCALE
         # io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/' + dir_[0] + '_' + dir_[3] + dir_[
@@ -1187,7 +1241,9 @@ def pre_process_movies_df(summary_dir, dir_list):
     # draw outlines on full nucleus ROI
     focus_max_val = int(np.max(img_clahe) / 2)
     obj_mask = np.zeros(shape=img_clahe.shape, dtype='uint8')  # shape=draw_img.shape[:-1]
-    """looping through """
+    """looping through and calculating length of foci coordinates in each image to draw outlines and applies contour
+      drawing tool; input image is clahe applied and then storing in img_focus_clahe_outlines
+      the cropped out the image with mask"""
     for i in range(len(focus_coords)):
         obj_mask[focus_coords[i][0], focus_coords[i][1]] = 200
     contours, hierarchy = cv2.findContours(obj_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
@@ -1198,9 +1254,12 @@ def pre_process_movies_df(summary_dir, dir_list):
     # save focus in focus folder
     # max proj
     # no outlines
+    """saving focus within detected foci folder with .tif extension"""
     io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci/' + dir_[0] + '_' +
               dir_[1] + '_' + dir_[2] + '_' + dir_[3] + dir_[4] + '_roi' + str(roi_count + 1) +
               '_focusNo' + str(i_focus) + '_' + channel_names[i_chanl] + '.tif', img_focus_clahe)
+    """taking the most distinct features of image using CLAHE; outlining and saving
+     elements within roi for further detection"""
     # outlines
     io.imsave(roi_file[:-4] + '_' + str(roi_count + 1) + '/DetectedFoci_Outlines/' + dir_[0] + '_' +
               dir_[1] + '_' + dir_[2] + '_' + dir_[3] + dir_[4] + '_roi' + str(roi_count + 1) +
@@ -1227,7 +1286,8 @@ def pre_process_movies_df(summary_dir, dir_list):
     center_coordinates = 0
     box = 0
     # draw on all detected and processed foci, contours only
-    """xyz"""
+    """looping from detected and processed foci in iterrows directory to apply enhancement tools, drawing bounding box
+    + curves to isolate foci and not saved"""
     for focus_full_i, focus_full_row in df_foci_full.iterrows():
         draw_on_img(file, file_root, a, focus_full_row['bbox'], focus_full_row['coords'],
                     center_coordinates, box, 1, 1,
@@ -1238,7 +1298,8 @@ def pre_process_movies_df(summary_dir, dir_list):
     # 4] + '_procfocusDetectionCheck_Full_roi'+ str(roi_count + 1) +'_' + channel_names[i_chanl] + '.tif', a)
 
     # draw on all detected and processed foci, contours only
-    """xyz"""
+    """looping from detected and processed foci in iterrows directory to apply enhancement tools, drawing bounding box
+    + curves to isolate foci and not saved; unsure if this is the raw image?"""
     for focus_full_i, focus_full_row in df_foci_full.iterrows():
         # print(focus_full_i) # for debugging
         draw_on_img(file, file_root, img_1, focus_full_row['bbox'], focus_full_row['coords'],
